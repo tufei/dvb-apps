@@ -60,8 +60,8 @@ static char separator[80];
 void (*old_handler)(int);
 
 struct atsc_string_buffer {
-	int buf_len;
-	int buf_pos;
+	size_t buf_len;
+	size_t buf_pos;
 	char *string;
 };
 
