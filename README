@@ -10,6 +10,7 @@ util/scan	- Scan for channels on your digital TV device.
 util/gnutv	- Tune, watch and stream your TV.
 
 General Utilities:
+util/atsc_epg	- Pull Electronic Program Guide (EPG) information from over-the-air (OTA) ATSC digital TV signal.
 util/dvbdate	- Set your clock from digital TV.
 util/dvbnet	- Control digital data network interfaces.
 util/dvbtraffic	- Monitor traffic on a digital device.
