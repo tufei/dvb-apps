@@ -351,21 +351,20 @@ int parse(const char *fname, const char *channel,
 }
 
 
-static
-int setup_frontend (int fe_fd, struct dvb_frontend_parameters *frontend)
+static int setup_frontend (int fe_fd, struct dvb_frontend_parameters *frontend)
 {
-	struct dvb_frontend_info fe_info;
+	int ret;
+	uint32_t mstd;
 
-	if (ioctl(fe_fd, FE_GET_INFO, &fe_info) < 0) {
-		PERROR("ioctl FE_GET_INFO failed");
+	if (check_frontend(fe_fd, FE_OFDM, &mstd) < 0) {
+		close(fe_fd);
 		return -1;
 	}
-
-	if (fe_info.type != FE_OFDM) {
-		ERROR ("frontend device is not a OFDM (DVB-T) device");
+	ret = dvbfe_set_delsys(fe_fd, SYS_DVBT);
+	if (ret) {
+		PERROR("SET Delsys failed");
 		return -1;
 	}
-
 	if (silent < 2)
 		fprintf (stderr,"tuning to %i Hz\n", frontend->frequency);
 
@@ -373,7 +372,6 @@ int setup_frontend (int fe_fd, struct dvb_frontend_parameters *frontend)
 		PERROR("ioctl FE_SET_FRONTEND failed");
 		return -1;
 	}
-
 	return 0;
 }
 
@@ -417,7 +415,7 @@ static void print_frontend_stats(int fe_fd, int human_readable)
 }
 
 static
-int check_frontend (int fe_fd, int human_readable)
+int monitor_frontend (int fe_fd, int human_readable)
 {
 	fe_status_t status;
 	do {
@@ -593,7 +591,7 @@ int main(int argc, char **argv)
 	if (parse (confname, channel, &frontend_param, &vpid, &apid, &sid))
 		return -1;
 
-	if ((frontend_fd = open(FRONTEND_DEV, O_RDWR)) < 0) {
+	if ((frontend_fd = open(FRONTEND_DEV, O_RDWR | O_NONBLOCK)) < 0) {
 		PERROR ("failed opening '%s'", FRONTEND_DEV);
 		return -1;
 	}
@@ -678,7 +676,7 @@ int main(int argc, char **argv)
 			print_frontend_stats(frontend_fd, human_readable);
 	} else {
 just_the_frontend_dude:
-		check_frontend(frontend_fd, human_readable);
+		monitor_frontend(frontend_fd, human_readable);
 	}
 
 	close(pat_fd);
