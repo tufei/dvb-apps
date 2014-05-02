@@ -23,6 +23,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <errno.h>
+#include <stdint.h>
 
 #include <sys/ioctl.h>
 #include <sys/types.h>
@@ -120,4 +121,227 @@ int get_pmt_pid(char *dmxdev, int sid)
 	}
 	close(patfd);
 	return pmt_pid;
+}
+
+char *type_str[] = {
+	"QPSK",
+	"QAM",
+	"OFDM",
+	"ATSC",
+};
+
+/* to be used with v3 drivers */
+int check_frontend_v3(int fd, enum fe_type type)
+{
+	struct dvb_frontend_info info;
+	int ret;
+
+	ret = ioctl(fd, FE_GET_INFO, &info);
+	if (ret < 0) {
+		perror("ioctl FE_GET_INFO failed");
+		close(fd);
+		ret = -1;
+		goto exit;
+	}
+	if (info.type != type) {
+		fprintf(stderr, "Not a valid %s device!\n", type_str[type]);
+		close(fd);
+		ret = -EINVAL;
+		goto exit;
+	}
+exit:
+	return ret;
+}
+
+char *del_str[] = {
+	"UNDEFINED",
+	"DVB-C (A)",
+	"DVB-C (B)",
+	"DVB-T",
+	"DSS",
+	"DVB-S",
+	"DVB-S2",
+	"DVB-H",
+	"ISDB-T",
+	"ISDB-S",
+	"ISDB-C",
+	"ATSC",
+	"ATSC-M/H",
+	"DTMB",
+	"CMMB",
+	"DAB",
+	"DVB-T2",
+	"TURBO",
+	"QAM (C)",
+};
+
+static int map_delivery_mode(fe_type_t *type, enum fe_delivery_system delsys)
+{
+	switch (delsys) {
+	case SYS_DSS:
+	case SYS_DVBS:
+	case SYS_DVBS2:
+	case SYS_TURBO:
+		*type = FE_QPSK;
+		break;
+	case SYS_DVBT:
+	case SYS_DVBT2:
+	case SYS_DVBH:
+	case SYS_ISDBT:
+		*type = FE_OFDM;
+		break;
+	case SYS_DVBC_ANNEX_A:
+	case SYS_DVBC_ANNEX_C:
+		*type = FE_QAM;
+		break;
+	case SYS_ATSC:
+	case SYS_DVBC_ANNEX_B:
+		*type = FE_ATSC;
+		break;
+	default:
+		fprintf(stderr, "Delivery system unsupported, please report to linux-media ML\n");
+		return -1;
+	}
+	return 0;
+}
+
+int get_property(int fd, uint32_t pcmd, uint32_t *len, uint8_t *data)
+{
+	struct dtv_property p, *b;
+	struct dtv_properties cmd;
+	int ret;
+
+	p.cmd = pcmd;
+	cmd.num = 1;
+	cmd.props = &p;
+	b = &p;
+
+	ret = ioctl(fd, FE_GET_PROPERTY, &cmd);
+	if (ret < 0) {
+		fprintf(stderr, "FE_SET_PROPERTY returned %d\n", ret);
+		return -1;
+	}
+	memcpy(len, &b->u.buffer.len, sizeof (uint32_t));
+	memcpy(data, b->u.buffer.data, *len);
+	return 0;
+}
+
+int set_property(int fd, uint32_t cmd, uint32_t data)
+{
+	struct dtv_property p, *b;
+	struct dtv_properties c;
+	int ret;
+
+	p.cmd = cmd;
+	c.num = 1;
+	c.props = &p;
+	b = &p;
+	b->u.data = data;
+	ret = ioctl(fd, FE_SET_PROPERTY, &c);
+	if (ret < 0) {
+		fprintf(stderr, "FE_SET_PROPERTY returned %d\n", ret);
+		return -1;
+	}
+	return 0;
+}
+
+int dvbfe_get_delsys(int fd, fe_delivery_system_t *delsys)
+{
+	uint32_t len;
+	/* Buggy API design */
+	return get_property(fd, DTV_DELIVERY_SYSTEM, &len, (uint8_t *)delsys);
+}
+
+int dvbfe_set_delsys(int fd, enum fe_delivery_system delsys)
+{
+	return set_property(fd, DTV_DELIVERY_SYSTEM, delsys);
+}
+
+int dvbfe_enum_delsys(int fd, uint32_t *len, uint8_t *data)
+{
+	return get_property(fd, DTV_ENUM_DELSYS, len, data);
+}
+
+int dvbfe_get_version(int fd, int *major, int *minor)
+{
+	struct dtv_property p, *b;
+	struct dtv_properties cmd;
+	int ret;
+
+	p.cmd = DTV_API_VERSION;
+	cmd.num = 1;
+	cmd.props = &p;
+	b = &p;
+
+	ret = ioctl(fd, FE_GET_PROPERTY, &cmd);
+	if (ret < 0) {
+		fprintf(stderr, "FE_GET_PROPERTY failed, ret=%d\n", ret);
+		return -1;
+	}
+	*major = (b->u.data >> 8) & 0xff;
+	*minor = b->u.data & 0xff;
+	return 0;
+}
+
+int check_frontend_multi(int fd, enum fe_type type, uint32_t *mstd)
+{
+	int ret;
+
+	enum fe_type delmode;
+	unsigned int i, valid_delsys = 0;
+	uint32_t len;
+	uint8_t data[32];
+
+	ret = dvbfe_enum_delsys(fd, &len, data);
+	if (ret) {
+		fprintf(stderr, "enum_delsys failed, ret=%d\n", ret);
+		ret = -EIO;
+		goto exit;
+	}
+	fprintf(stderr, "\t FE_CAN { ");
+	for (i = 0; i < len; i++) {
+		if (i < len - 1)
+			fprintf(stderr, "%s + ", del_str[data[i]]);
+		else
+			fprintf(stderr, "%s", del_str[data[i]]);
+	}
+	fprintf(stderr, " }\n");
+	/* check whether frontend can support our delivery */
+	for (i = 0; i < len; i++) {
+		map_delivery_mode(&delmode, data[i]);
+		if (type == delmode) {
+			valid_delsys = 1;
+			ret = 0;
+			break;
+		}
+	}
+	if (!valid_delsys) {
+		fprintf(stderr, "Not a valid %s device!\n", type_str[type]);
+		ret = -EINVAL;
+		goto exit;
+	}
+	*mstd = len; /* mstd has supported delsys count */
+exit:
+	return ret;
+}
+
+int check_frontend(int fd, enum fe_type type, uint32_t *mstd)
+{
+	int major, minor, ret;
+
+	ret = dvbfe_get_version(fd, &major, &minor);
+	if (ret)
+		goto exit;
+	fprintf(stderr, "Version: %d.%d  ", major, minor);
+	if ((major == 5) && (minor > 8)) {
+		ret = check_frontend_multi(fd, type, mstd);
+		if (ret)
+			goto exit;
+	} else {
+		ret = check_frontend_v3(fd, type);
+		if (ret)
+			goto exit;
+	}
+exit:
+	return ret;
 }
