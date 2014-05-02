@@ -77,6 +77,52 @@ static inline void bswap48(uint8_t *buf) {
 #define EBIT7(x1,x2,x3,x4,x5,x6,x7) x7 x6 x5 x4 x3 x2 x1
 #define EBIT8(x1,x2,x3,x4,x5,x6,x7,x8) x8 x7 x6 x5 x4 x3 x2 x1
 
+#define NO_UNALIGNED_ACCESS 1
+
+#ifdef NO_UNALIGNED_ACCESS
+static inline void bswap16(uint8_t *buf) {
+	uint8_t tmp = buf[0];
+
+	buf[0] = buf[1];
+	buf[1] = tmp;
+}
+
+static inline void bswap32(uint8_t *buf) {
+	uint8_t tmp[4];
+
+	tmp[0] = buf[3];
+	tmp[1] = buf[2];
+	tmp[2] = buf[1];
+	tmp[3] = buf[0];
+
+	buf[0] = tmp[0];
+	buf[1] = tmp[1];
+	buf[2] = tmp[2];
+	buf[3] = tmp[3];
+}
+
+static inline void bswap64(uint8_t * buf) {
+	uint8_t tmp[8];
+
+	tmp[0] = buf[7];
+	tmp[1] = buf[6];
+	tmp[2] = buf[5];
+	tmp[3] = buf[4];
+	tmp[4] = buf[3];
+	tmp[5] = buf[2];
+	tmp[6] = buf[1];
+	tmp[7] = buf[0];
+
+	buf[0] = tmp[0];
+	buf[1] = tmp[1];
+	buf[2] = tmp[2];
+	buf[3] = tmp[3];
+	buf[4] = tmp[4];
+	buf[5] = tmp[5];
+	buf[6] = tmp[6];
+	buf[7] = tmp[7];
+}
+#else
 static inline void bswap16(uint8_t * buf) {
 	*((uint16_t*)buf) = bswap_16((*(uint16_t*)buf));
 }
@@ -88,6 +134,7 @@ static inline void bswap32(uint8_t * buf) {
 static inline void bswap64(uint8_t * buf) {
 	*((uint64_t*)buf) = bswap_64((*(uint64_t*)buf));
 }
+#endif /* NO_UNALIGNED_ACCESS */
 
 static inline void bswap24(uint8_t * buf) {
 	uint8_t tmp0 = buf[0];
