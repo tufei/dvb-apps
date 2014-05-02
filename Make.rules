@@ -1,5 +1,13 @@
 # build rules for linuxtv.org dvb-apps
 
+ifneq ($(CROSS_COMPILE),)
+CC      = $(CROSS_COMPILE)gcc
+AR      = $(CROSS_COMPILE)ar
+RANLIB  = $(CROSS_COMPILE)ranlib
+STRIP   = $(CROSS_COMPILE)strip
+LD      = $(CROSS_COMPILE)ld
+endif
+
 CFLAGS ?= -g -Wall -W -Wshadow -Wpointer-arith -Wstrict-prototypes
 
 ifneq ($(lib_name),)
