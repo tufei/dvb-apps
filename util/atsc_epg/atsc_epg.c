@@ -82,10 +82,10 @@ struct atsc_event_info {
 	uint16_t id;
 	struct tm start;
 	struct tm end;
-	int title_pos;
-	int title_len;
-	int msg_pos;
-	int msg_len;
+	size_t title_pos;
+	size_t title_len;
+	size_t msg_pos;
+	size_t msg_len;
 };
 
 struct atsc_eit_section_info {
@@ -497,7 +497,7 @@ static int parse_message(struct atsc_channel_info *channel,
 
 		atsc_text_string_segments_for_each(str, seg, j) {
 			event->msg_pos = channel->msg_buf.buf_pos;
-			if (0 > atsc_text_segment_decode(seg, (uint8_t **)&channel->msg_buf.string, (size_t *)&channel->msg_buf.buf_len, (size_t *)&channel->msg_buf.buf_pos)) {
+			if (0 > atsc_text_segment_decode(seg, (uint8_t **)&channel->msg_buf.string, &channel->msg_buf.buf_len, &channel->msg_buf.buf_pos)) {
 				error_msg("error calling atsc_text_segment_decode()");
 				return -1;
 			}
@@ -620,7 +620,7 @@ static int parse_events(struct atsc_channel_info *curr_info,
 
 			atsc_text_string_segments_for_each(str, seg, k) {
 				e_info->title_pos = curr_info->title_buf.buf_pos;
-				if (0 > atsc_text_segment_decode(seg, (uint8_t **)&curr_info->title_buf.string, (size_t *)&curr_info->title_buf.buf_len, (size_t *)&curr_info->title_buf.buf_pos)) {
+				if (0 > atsc_text_segment_decode(seg, (uint8_t **)&curr_info->title_buf.string, &curr_info->title_buf.buf_len, &curr_info->title_buf.buf_pos)) {
 					error_msg("error calling atsc_text_segment_decode()");
 					return -1;
 				}
@@ -861,8 +861,8 @@ static int print_events(struct atsc_channel_info *channel,
 		/*line[event->title_len] = '\0';*/
 		fprintf(stdout, "%s\n", line);
 		if (event->msg_len) {
-			int len = event->msg_len;
-			int pos = event->msg_pos;
+			size_t len = event->msg_len;
+			size_t pos = event->msg_pos;
 			size_t part;
 
 			do {
@@ -943,7 +943,7 @@ static int atsc_scan_table(int dmxfd, uint16_t pid, enum atsc_section_tag tag,
 	filter[0] = tag;
 	mask[0] = 0xFF;
 	if (dvbdemux_set_section_filter(dmxfd, pid, filter, mask, 1, 1)) {
-		error_msg("error calling atsc_scan_table()");
+		error_msg("error calling dvbdemux_set_section_filter()");
 		return -1;
 	}
 
@@ -1009,7 +1009,7 @@ int main(int argc, char *argv[])
 	for ( ; ; ) {
 		char c;
 
-		if (-1 == (c = getopt(argc, argv, "a:f:p:m:th")))
+		if ((char)-1 == (c = getopt(argc, argv, "a:f:p:m:th")))
 			break;
 
 		switch(c) {
