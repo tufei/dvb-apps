@@ -256,7 +256,7 @@ static int open_frontend(struct dvbfe_handle **fe)
 	}
 	fe_info.feparams.frequency = frequency;
 	fe_info.feparams.inversion = DVBFE_INVERSION_AUTO;
-	fe_info.feparams.u.atsc.modulation = DVBFE_ATSC_MOD_VSB_8;
+	fe_info.feparams.u.atsc.modulation = DVBFE_ATSC_MOD_AUTO;
 	fprintf(stdout, "tuning to %d Hz, please wait...\n", frequency);
 	if (dvbfe_set(*fe, &fe_info.feparams, TIMEOUT * 1000)) {
 		error_msg("cannot lock to %d Hz in %d seconds", frequency, TIMEOUT);
